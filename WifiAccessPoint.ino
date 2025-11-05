@@ -1,39 +1,69 @@
 #include <WiFi.h>
+#include <WebServer.h>
 
-// Cấu hình Wi-Fi Access Point
-const char* SSID = "MyESP32";
-const char* PASSWORD = "Juan123";
+// Thông tin Wi-Fi mà ESP32 sẽ KẾT NỐI VÀO (Station mode)
+const char* ssid_STA = "VJU Office";
+const char* pass_STA = "VJuoffice@2023";
+
+// Thông tin Wi-Fi mà ESP32 sẽ PHÁT RA (Access Point mode)
+const char* ssid_AP = "ThamkhaoChatGPT";
+const char* pass_AP = "Chat@12345";
+
+// Tạo web server (chạy trên cả 2 chế độ)
+WebServer server(80);
+
+void handleRoot() {
+  String html = "<h2>Xin chào từ ESP32!</h2>";
+  html += "<p>ESP32 đang chạy chế độ kép (STA + AP)</p>";
+  html += "<p>IP Wi-Fi chính (STA): " + WiFi.localIP().toString() + "</p>";
+  html += "<p>IP Wi-Fi riêng (AP): " + WiFi.softAPIP().toString() + "</p>";
+  server.send(200, "text/html", html);
+}
 
 void setup() {
   Serial.begin(115200);
-  delay(500);  // Đảm bảo Serial sẵn sàng
+  delay(1000);
+  Serial.println("\n=== Bắt đầu chế độ kép Wi-Fi (STA + AP) ===");
 
-  // Cấu hình IP tĩnh cho Access Point
-  IPAddress apIP(192, 168, 4, 1);
-  IPAddress subnet(255, 255, 255, 0);
+  // 1️⃣ Kết nối vào Wi-Fi có sẵn
+  WiFi.mode(WIFI_AP_STA);  // Bật cả 2 chế độ
+  WiFi.begin(ssid_STA, pass_STA);
+  Serial.print("🔄 Đang kết nối tới Wi-Fi: ");
+  Serial.println(ssid_STA);
 
-  // Khởi tạo Access Point
-  WiFi.softAPConfig(apIP, apIP, subnet);
-  WiFi.softAP(SSID, PASSWORD);
+  int retry = 0;
+  while (WiFi.status() != WL_CONNECTED && retry < 20) {
+    delay(500);
+    Serial.print(".");
+    retry++;
+  }
 
-  // Hiển thị thông tin
-  Serial.println("\n===== ESP32 Access Point Started =====");
-  Serial.printf("SSID: %s\n", SSID);
-  Serial.printf("Password: %s\n", PASSWORD);
-  Serial.printf("AP IP Address: %s\n", WiFi.softAPIP().toString().c_str());
-  Serial.println("======================================");
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.println("\n✅ Đã kết nối Wi-Fi thành công!");
+    Serial.print("🌐 IP STA: ");
+    Serial.println(WiFi.localIP());
+  } else {
+    Serial.println("\n⚠️ Không thể kết nối Wi-Fi STA!");
+  }
+
+  // 2️⃣ Phát Wi-Fi riêng (Access Point)
+  bool ap_ok = WiFi.softAP(ssid_AP, pass_AP);
+  if (ap_ok) {
+    Serial.println("✅ Tạo Wi-Fi Access Point thành công!");
+    Serial.print("📶 Tên Wi-Fi AP: ");
+    Serial.println(ssid_AP);
+    Serial.print("🌐 IP AP: ");
+    Serial.println(WiFi.softAPIP());
+  } else {
+    Serial.println("❌ Không thể tạo Wi-Fi Access Point!");
+  }
+
+  // 3️⃣ Cấu hình web server
+  server.on("/", handleRoot);
+  server.begin();
+  Serial.println("🚀 Web server đã khởi động!");
 }
 
 void loop() {
-  static int lastClientCount = -1;  // Lưu số client lần trước
-  int currentClientCount = WiFi.softAPgetStationNum();
-
-  // Chỉ in khi có thay đổi
-  if (currentClientCount != lastClientCount) {
-    Serial.printf("📶 Connected devices: %d\n", currentClientCount);
-    lastClientCount = currentClientCount;
-  }
-
-  delay(2000);
+  server.handleClient();
 }
-
